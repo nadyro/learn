@@ -1,0 +1,92 @@
+name: commerce-service CI
+
+on:
+  pull_request:
+    paths:
+      - "commerce-service/**"
+      - ".github/workflows/commerce-service-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "commerce-service/**"
+      - ".github/workflows/commerce-service-ci.yml"
+
+# Least privilege: jobs only read the repository unless they explicitly need more.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the previous, now useless, run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: commerce-service
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: commerce-service/pom.xml
+
+      # Formatting check, unit tests, integration tests (Testcontainers uses the Docker daemon of the runner),
+      # architecture rules and the coverage gate. Exactly what `make verify` runs locally.
+      - name: Verify
+        run: ./mvnw --batch-mode --no-transfer-progress verify
+
+      - name: Upload test and coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            commerce-service/target/surefire-reports/
+            commerce-service/target/failsafe-reports/
+            commerce-service/target/site/jacoco/
+          retention-days: 7
+
+      - name: Upload OpenAPI document
+        uses: actions/upload-artifact@v7
+        with:
+          name: openapi
+          path: commerce-service/target/openapi.json
+          retention-days: 30
+
+  image:
+    name: Build and scan container image
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Pushing to the registry and deploying is done by the CD pipeline, which is not part of this repository.
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: commerce-service
+          load: true
+          push: false
+          tags: commerce-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image for known vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: commerce-service:${{ github.sha }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

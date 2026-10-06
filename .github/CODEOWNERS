@@ -1,0 +1,5 @@
+# Owners are automatically requested for review on pull requests touching their files.
+# In a real organisation these are GitHub teams, e.g. @kestrel-outfitters/commerce-team.
+*                     @nadyro
+/commerce-service/    @nadyro
+/.github/             @nadyro

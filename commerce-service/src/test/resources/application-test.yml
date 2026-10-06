@@ -1,0 +1,30 @@
+# Configuration for integration tests (*IT). Postgres and Kafka come from Testcontainers (@ServiceConnection).
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Never contacted: tests authenticate with mock JWTs (SecurityMockMvcRequestPostProcessors.jwt()).
+          issuer-uri: https://idp.kestrel-outfitters.test/realms/kestrel
+          jwk-set-uri: https://idp.kestrel-outfitters.test/realms/kestrel/protocol/openid-connect/certs
+
+management:
+  server:
+    port: 0
+  tracing:
+    export:
+      enabled: false
+
+springdoc:
+  api-docs:
+    enabled: true
+
+commerce:
+  outbox:
+    create-topics: true
+    relay:
+      interval: PT0.1S
+  payments:
+    webhook:
+      signing-secret: test-webhook-signing-secret-0123456789abcdef

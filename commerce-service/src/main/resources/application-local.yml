@@ -1,0 +1,55 @@
+# Profile for running the service on a developer machine against the containers of docker-compose.yml.
+# Activated by `make run` (or SPRING_PROFILES_ACTIVE=local). Never used in a deployed environment.
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/commerce
+    username: commerce
+    password: commerce
+
+  flyway:
+    # Adds demo products and stock on top of the schema migrations.
+    locations: classpath:db/migration,classpath:db/seed
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8180/realms/kestrel
+          jwk-set-uri: http://localhost:8180/realms/kestrel/protocol/openid-connect/certs
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      # Start the observability stack (make up-observability) and set TRACING_ENABLED=true to send traces to Jaeger.
+      enabled: ${TRACING_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    com.kestrel: DEBUG
+
+commerce:
+  cors:
+    allowed-origins: http://localhost:3000
+  outbox:
+    create-topics: true
+  payments:
+    webhook:
+      # Local only. Real environments get their secret from the secret manager.
+      signing-secret: local-dev-webhook-signing-secret-not-for-production

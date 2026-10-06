@@ -1,0 +1,145 @@
+{
+  "realm": "kestrel",
+  "displayName": "Kestrel Outfitters (local)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 3600,
+  "roles": {
+    "realm": [
+      {
+        "name": "customer",
+        "description": "Can browse, order and follow their own orders"
+      },
+      {
+        "name": "admin",
+        "description": "Back-office: catalog, inventory and order management"
+      },
+      {
+        "name": "offline_access",
+        "description": "${role_offline-access}"
+      },
+      {
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}"
+      },
+      {
+        "name": "default-roles-kestrel",
+        "description": "Roles given to every new user, including self-registered ones",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "customer",
+            "offline_access",
+            "uma_authorization"
+          ]
+        }
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-kestrel",
+    "composite": true
+  },
+  "clients": [
+    {
+      "clientId": "commerce-web",
+      "name": "Kestrel storefront",
+      "description": "Public client used by the storefront and, locally, by developers to get tokens.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:8080/swagger-ui/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "commerce-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "commerce-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "8d0b7c5e-1f43-4c5a-9a51-6a1f3c2b0a01",
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.com",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Martin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-kestrel",
+        "customer"
+      ]
+    },
+    {
+      "id": "8d0b7c5e-1f43-4c5a-9a51-6a1f3c2b0a02",
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@example.com",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Nguyen",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-kestrel",
+        "customer"
+      ]
+    },
+    {
+      "id": "8d0b7c5e-1f43-4c5a-9a51-6a1f3c2b0a03",
+      "username": "olivia",
+      "enabled": true,
+      "email": "olivia.ops@kestrel-outfitters.example",
+      "emailVerified": true,
+      "firstName": "Olivia",
+      "lastName": "Rossi",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "olivia",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-kestrel",
+        "customer",
+        "admin"
+      ]
+    }
+  ]
+}

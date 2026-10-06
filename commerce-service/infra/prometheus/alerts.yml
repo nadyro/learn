@@ -1,0 +1,54 @@
+# Alert rules for commerce-service. Each alert links to the matching section of docs/runbook.md.
+# Thresholds are starting points: tune them with real traffic, an alert nobody acts on is worse than no alert.
+groups:
+  - name: commerce-service
+    rules:
+      - alert: CommerceServiceDown
+        expr: absent(up{job="commerce-service"} == 1)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: No commerce-service instance is up
+          runbook_url: docs/runbook.md#commerceservicedown
+
+      - alert: CommerceHighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{application="commerce-service", status=~"5.."}[5m]))
+            / sum(rate(http_server_requests_seconds_count{application="commerce-service"}[5m])) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 2% of requests fail with a 5xx error
+          runbook_url: docs/runbook.md#commercehigherrorrate
+
+      - alert: CommerceHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{application="commerce-service", uri=~"/api/.*"}[5m]))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 95th percentile API latency is above 500 ms
+          runbook_url: docs/runbook.md#commercehighlatency
+
+      - alert: CommerceOutboxBacklog
+        expr: max(commerce_outbox_events_pending{application="commerce-service"}) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Order events are not being published to Kafka ({{ $value }} pending)
+          runbook_url: docs/runbook.md#commerceoutboxbacklog
+
+      - alert: CommerceDatabasePoolExhausted
+        expr: max(hikaricp_connections_pending{application="commerce-service", pool="commerce-db"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Requests are waiting for a database connection
+          runbook_url: docs/runbook.md#commercedatabasepoolexhausted

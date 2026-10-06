@@ -1,0 +1,30 @@
+# Dependabot opens pull requests to keep dependencies up to date. CI must be green before merging them.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /commerce-service
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Spring Boot manages most library versions: upgrade it as one unit.
+      spring-boot:
+        patterns: ["org.springframework.boot:*"]
+      maven-plugins:
+        patterns: ["*maven-plugin*"]
+
+  - package-ecosystem: docker
+    directory: /commerce-service
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: /commerce-service
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

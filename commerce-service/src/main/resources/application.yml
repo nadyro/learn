@@ -1,0 +1,154 @@
+# Base configuration, shared by every environment.
+#
+# Conventions:
+#   - Values here are safe production defaults. Environment-specific values (URLs, credentials, ...) are provided by
+#     the deployment through environment variables, using Spring Boot's relaxed binding:
+#       spring.datasource.url  <=>  SPRING_DATASOURCE_URL
+#   - Secrets are NEVER written in this repository. See docs/configuration.md for the full list of variables.
+#   - application-local.yml contains the values for running on a developer machine.
+
+spring:
+  application:
+    name: commerce-service
+
+  datasource:
+    hikari:
+      pool-name: commerce-db
+      # Keep (replicas x pool size) below the database's max_connections, see docs/runbook.md.
+      maximum-pool-size: 10
+      # Hikari settings are in milliseconds (they are bound directly to HikariDataSource, no Duration support).
+      connection-timeout: 5000 # fail fast instead of piling up requests when the pool is exhausted
+      max-lifetime: 1800000 # 30 min, below the database/proxy idle connection timeout
+
+  jpa:
+    # Never keep the database connection open while rendering the HTTP response.
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema. Hibernate only checks that the entities match it.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    locations: classpath:db/migration
+
+  kafka:
+    producer:
+      # Wait for all in-sync replicas: an acknowledged event is not lost if a broker dies.
+      acks: all
+      properties:
+        enable.idempotence: true
+        linger.ms: 5
+        # Fail fast when Kafka is down instead of blocking the outbox relay: the event stays in the outbox and is
+        # retried. Kafka requires delivery.timeout.ms >= linger.ms + request.timeout.ms.
+        max.block.ms: 10000
+        request.timeout.ms: 10000
+        delivery.timeout.ms: 30000
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Tokens must be issued for this API (the "aud" claim), not merely by our identity provider.
+          audiences: commerce-api
+
+  lifecycle:
+    # On SIGTERM, stop accepting requests and give in-flight ones this long to finish.
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: 8080
+  shutdown: graceful
+  # We run behind a load balancer that sets X-Forwarded-* headers.
+  forward-headers-strategy: framework
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  server:
+    # Actuator is served on a separate port that is not exposed outside the cluster.
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        # Kubernetes stops sending traffic to a replica that cannot reach its database.
+        readiness:
+          include: readinessState, db
+  info:
+    git:
+      mode: simple
+    java:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # Enables latency percentiles (p95, p99) in Prometheus.
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      # Trace 10% of requests. Increase temporarily when investigating an incident.
+      probability: 0.1
+    # Traces are exported with OTLP to the endpoint set in MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT.
+  otlp:
+    metrics:
+      export:
+        # Metrics are pulled by Prometheus from /actuator/prometheus, not pushed with OTLP.
+        enabled: false
+  logging:
+    export:
+      otlp:
+        # Logs go to stdout, where the platform collects them.
+        enabled: false
+
+logging:
+  structured:
+    # Human-readable logs by default (local runs, tests). The container image sets LOG_FORMAT=ecs to emit JSON logs
+    # (Elastic Common Schema) that the log platform can parse and index.
+    format:
+      console: ${LOG_FORMAT:}
+    ecs:
+      service:
+        name: ${spring.application.name}
+  pattern:
+    # Human-readable logs show the trace ID and request ID of each line (JSON logs always include them).
+    correlation: "[trace=%X{traceId:-} req=%X{requestId:-}] "
+  level:
+    root: INFO
+
+springdoc:
+  # API docs are disabled by default (production) and enabled in local, dev and staging environments.
+  api-docs:
+    enabled: false
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: false
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+commerce:
+  cors:
+    allowed-origins: []
+  outbox:
+    create-topics: false
+    topics:
+      order: commerce.order-events.v1
+    relay:
+      enabled: true
+      interval: PT1S
+      batch-size: 100
+      send-timeout: PT10S
+  payments:
+    webhook:
+      tolerance: PT5M
+      # signing-secret: from COMMERCE_PAYMENTS_WEBHOOK_SIGNING_SECRET (required)

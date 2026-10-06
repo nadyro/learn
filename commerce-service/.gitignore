@@ -1,0 +1,21 @@
+# Build output
+target/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+.project
+.classpath
+.settings/
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local overrides and secrets: never commit them
+.env
+*.local.yml
+http/http-client.private.env.json

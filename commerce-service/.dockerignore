@@ -1,0 +1,6 @@
+# Keep the build context small and free of secrets: only what the Dockerfile needs.
+*
+!.mvn/
+!mvnw
+!pom.xml
+!src/

@@ -1,0 +1,24 @@
+# Only the API gateway may call the API, and only the monitoring stack may read actuator endpoints.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: commerce-service
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: commerce-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: api-gateway
+      ports:
+        - port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8081

@@ -1,0 +1,29 @@
+name: CodeQL
+
+# Static security analysis of the Java code (SQL injection, unsafe deserialization, ...).
+# Findings appear in the repository's Security tab.
+on:
+  pull_request:
+    paths: ["commerce-service/src/**"]
+  push:
+    branches: [main]
+    paths: ["commerce-service/src/**"]
+  schedule:
+    - cron: "17 4 * * 1" # weekly, to catch newly published vulnerability patterns
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze Java
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4

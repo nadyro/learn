@@ -1,0 +1,181 @@
+# Local development environment for commerce-service.
+#
+#   make up                  -> Postgres, Keycloak, Kafka and Kafka UI (run the service itself with `make run`)
+#   make up-observability    -> + Prometheus, Grafana and Jaeger
+#   make up-app              -> + the service, built from the Dockerfile, configured like a deployed environment
+#
+# Everything here is for local use only: passwords are well-known and nothing is hardened.
+
+name: kestrel-commerce
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: commerce
+      POSTGRES_USER: commerce
+      POSTGRES_PASSWORD: commerce
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U commerce -d commerce"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Identity provider. Admin console: http://localhost:8180 (admin / admin). Realm "kestrel" is imported at startup.
+  keycloak:
+    image: keycloak/keycloak:26.8 # same image as quay.io/keycloak/keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Tokens always carry iss=http://localhost:8180/realms/kestrel, whether Keycloak is reached from the host or
+      # from another container. The service validates that issuer.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./infra/keycloak/kestrel-realm.json:/opt/keycloak/data/import/kestrel-realm.json:ro
+    healthcheck:
+      # The image has no curl: talk HTTP to the management port with bash.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
+
+  # Single-node Kafka in KRaft mode (no ZooKeeper). Data is not persisted: topics are recreated on start.
+  kafka:
+    image: apache/kafka:4.2.1
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # EXTERNAL is for clients on your machine (localhost:9092), INTERNAL for other containers (kafka:29092).
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Like in production, topics must be created explicitly.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  # Browse topics and messages: http://localhost:8085
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.0
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------------------------------------------
+  # The service itself, built from the Dockerfile and configured through environment variables exactly like in a
+  # deployed environment. Started with `make up-app`.
+  # ---------------------------------------------------------------------------------------------------------------
+  commerce-service:
+    profiles: ["app"]
+    build: .
+    image: kestrel/commerce-service:local
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/commerce
+      SPRING_DATASOURCE_USERNAME: commerce
+      SPRING_DATASOURCE_PASSWORD: commerce
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/seed
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:8180/realms/kestrel
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/kestrel/protocol/openid-connect/certs
+      COMMERCE_PAYMENTS_WEBHOOK_SIGNING_SECRET: local-dev-webhook-signing-secret-not-for-production
+      COMMERCE_OUTBOX_CREATE_TOPICS: "true"
+      COMMERCE_CORS_ALLOWED_ORIGINS: http://localhost:3000
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+    healthcheck:
+      # Same endpoint as the Kubernetes readiness probe.
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/actuator/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------------------------------------------
+  # Observability stack, started with `make up-observability`.
+  # ---------------------------------------------------------------------------------------------------------------
+
+  # Metrics and alert rules: http://localhost:9090
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus:/etc/prometheus:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Dashboards: http://localhost:3001 (anonymous admin access, local only)
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:13.2.3
+    ports:
+      - "3001:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  # Distributed traces: http://localhost:16686 (receives OTLP on 4318)
+  jaeger:
+    profiles: ["observability"]
+    image: jaegertracing/jaeger:2.21.0
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+
+volumes:
+  postgres-data:

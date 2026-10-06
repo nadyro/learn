@@ -1,0 +1,105 @@
+### Requests for the IntelliJ IDEA HTTP client (or the `ijhttp` CLI), against a local environment.
+### Run the two "token" requests first: they store the tokens used by the other requests.
+### Environment: http-client.env.json, select "local".
+
+### Token for alice (customer)
+POST {{keycloakUrl}}/realms/kestrel/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=commerce-web&username=alice&password=alice
+
+> {% client.global.set("customerToken", response.body.access_token); %}
+
+### Token for olivia (admin)
+POST {{keycloakUrl}}/realms/kestrel/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=commerce-web&username=olivia&password=olivia
+
+> {% client.global.set("adminToken", response.body.access_token); %}
+
+### Search products (public)
+GET {{apiUrl}}/api/v1/products?q=tent&page=0&size=20
+
+### Get a product (public)
+GET {{apiUrl}}/api/v1/products/0192f0a0-0000-7000-8000-000000000001
+
+### My customer profile
+GET {{apiUrl}}/api/v1/customers/me
+Authorization: Bearer {{customerToken}}
+
+### Place an order (change the Idempotency-Key for each new order)
+POST {{apiUrl}}/api/v1/orders
+Authorization: Bearer {{customerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$random.uuid}}
+
+{
+  "items": [
+    { "productId": "0192f0a0-0000-7000-8000-000000000001", "quantity": 1 },
+    { "productId": "0192f0a0-0000-7000-8000-000000000007", "quantity": 2 }
+  ],
+  "shippingAddress": {
+    "recipientName": "Alice Martin",
+    "line1": "12 Rue des Alpes",
+    "city": "Grenoble",
+    "postalCode": "38000",
+    "countryCode": "FR"
+  }
+}
+
+> {% client.global.set("orderId", response.body.id); %}
+
+### My orders
+GET {{apiUrl}}/api/v1/orders?page=0&size=10
+Authorization: Bearer {{customerToken}}
+
+### One of my orders
+GET {{apiUrl}}/api/v1/orders/{{orderId}}
+Authorization: Bearer {{customerToken}}
+
+### Cancel my order (only while unpaid)
+POST {{apiUrl}}/api/v1/orders/{{orderId}}/cancel
+Authorization: Bearer {{customerToken}}
+
+### [Admin] Search orders
+GET {{apiUrl}}/api/v1/admin/orders?status=PAID
+Authorization: Bearer {{adminToken}}
+
+### [Admin] Ship an order (pay it first: scripts/send-payment-webhook.sh <orderId> <amount>)
+POST {{apiUrl}}/api/v1/admin/orders/{{orderId}}/shipment
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "carrier": "Colissimo", "trackingNumber": "6A12345678901" }
+
+### [Admin] Mark as delivered
+POST {{apiUrl}}/api/v1/admin/orders/{{orderId}}/delivery
+Authorization: Bearer {{adminToken}}
+
+### [Admin] Create a product
+POST {{apiUrl}}/api/v1/admin/products
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "sku": "GLOVES-WINTER-M",
+  "name": "Winter gloves (M)",
+  "description": "Waterproof insulated gloves",
+  "price": { "amount": 59.90, "currency": "EUR" },
+  "initialStock": 30
+}
+
+### [Admin] Stock of a product
+GET {{apiUrl}}/api/v1/admin/inventory/0192f0a0-0000-7000-8000-000000000001
+Authorization: Bearer {{adminToken}}
+
+### [Admin] Restock a product
+POST {{apiUrl}}/api/v1/admin/inventory/0192f0a0-0000-7000-8000-000000000001/adjustments
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "delta": 10, "reason": "RESTOCK", "note": "Delivery note DN-2026-0042" }
+
+### Health (actuator port)
+GET {{managementUrl}}/actuator/health

@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: commerce-service
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Start a new pod before stopping an old one: no capacity loss during deployments.
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: commerce-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: commerce-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      serviceAccountName: commerce-service
+      automountServiceAccountToken: false
+      # Longer than preStop (10s) + Spring's graceful shutdown timeout (20s).
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across availability zones so losing one zone does not take the service down.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: commerce-service
+      containers:
+        - name: commerce-service
+          image: commerce-service
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: commerce-service-config
+            - secretRef:
+                name: commerce-service-secrets
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              # No CPU limit on purpose: CPU limits cause throttling and latency spikes. Memory is capped because the
+              # JVM heap is sized from it (MaxRAMPercentage).
+              memory: 768Mi
+          # Gives the application up to 150 s to start (Flyway migrations included) before liveness checks begin.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 5
+            failureThreshold: 30
+          # Failing liveness = the process is broken and is restarted. Never include dependencies (database...) here,
+          # or a database blip would restart every pod at once.
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            failureThreshold: 3
+          # Failing readiness = temporarily removed from the load balancer (e.g. database unreachable).
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            # Give the load balancers time to stop sending traffic before Spring starts its graceful shutdown.
+            preStop:
+              sleep:
+                seconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # Tomcat needs a writable temporary directory; the rest of the filesystem is read-only.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

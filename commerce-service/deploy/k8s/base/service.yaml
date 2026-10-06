@@ -1,0 +1,13 @@
+# Internal service. Public traffic arrives through the API gateway, managed by the platform team.
+apiVersion: v1
+kind: Service
+metadata:
+  name: commerce-service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: commerce-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

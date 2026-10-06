@@ -1,0 +1,35 @@
+# Kubernetes manifests for commerce-service, rendered with Kustomize:
+#   kubectl kustomize deploy/k8s/overlays/staging
+# The CD pipeline sets the image tag and applies the overlay of each environment (GitOps, see docs/deployment.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: commerce-service
+      app.kubernetes.io/part-of: kestrel-commerce
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: true
+
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+  - externalsecret.yaml
+
+# Non-secret configuration, exposed to the container as environment variables (Spring Boot relaxed binding).
+# Kustomize appends a hash of the content to the name, so changing a value triggers a rolling restart.
+configMapGenerator:
+  - name: commerce-service-config
+    literals:
+      - SPRING_DATASOURCE_USERNAME=commerce_app
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://auth.kestrel-outfitters.example/realms/kestrel
+      - MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT=http://otel-collector.observability.svc:4318/v1/traces
+
+images:
+  - name: commerce-service
+    newName: registry.kestrel-outfitters.example/commerce/commerce-service
+    newTag: set-by-the-cd-pipeline
