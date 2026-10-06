@@ -14,15 +14,29 @@ updates:
       maven-plugins:
         patterns: ["*maven-plugin*"]
 
+  # Base images of the Dockerfile.
   - package-ecosystem: docker
     directory: /commerce-service
     schedule:
       interval: weekly
+    ignore:
+      # Java major versions are upgraded deliberately, to LTS releases only (21 -> 25, not 21 -> 24), together with
+      # the build (java.version in pom.xml), CI and developer machines. Patch updates of the image are welcome.
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
 
+  # Images of the local environment (compose.yaml).
   - package-ecosystem: docker-compose
     directory: /commerce-service
     schedule:
       interval: monthly
+    ignore:
+      # Major versions of infrastructure (Postgres 17 -> 18, Keycloak 26 -> 27, ...) can change data formats or
+      # behaviour, and must match what runs in production: they are upgraded in a dedicated ticket.
+      # Reviewers: when Postgres or Kafka is bumped here, bump the same image in TestcontainersConfiguration.java
+      # in the same pull request, so tests keep running against the version used locally.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
