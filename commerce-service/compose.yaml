@@ -60,7 +60,7 @@ services:
 
   # Single-node Kafka in KRaft mode (no ZooKeeper). Data is not persisted: topics are recreated on start.
   kafka:
-    image: apache/kafka:4.2.1
+    image: apache/kafka:4.3.1
     ports:
       - "${COMMERCE_KAFKA_PORT:-9092}:9092"
     environment:
