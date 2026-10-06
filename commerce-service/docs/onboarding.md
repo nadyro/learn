@@ -119,6 +119,27 @@ The checklist the team follows for a new endpoint, e.g. `GET /api/v1/admin/inven
 Pick **KST-101** in the [backlog](backlog.md): it touches every layer without being risky. Create a branch, open a
 pull request early (draft), and ask for feedback. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for the conventions.
 
+## Troubleshooting the local environment
+
+**`make up` fails with `port is already allocated`, or `make run` fails with `FATAL: role "commerce" does not exist`.**
+Another program already uses one of our ports, typically another project's Postgres container on 5432. In the second
+case the service actually connected to *that* database, which has no `commerce` user. Find who holds the port with
+`lsof -nP -iTCP:5432 -sTCP:LISTEN` (or `docker ps`), then either stop it, or move ours:
+
+```bash
+cp .env.example .env          # personal, git-ignored
+# edit .env, e.g. COMMERCE_POSTGRES_PORT=15432
+make down && make up && make run
+```
+
+`.env` is read by Docker Compose, by the `local` Spring profile and by the scripts, so they all agree on the ports.
+Run the service from the `commerce-service` directory (as `make run` does): that is where it looks for `.env`.
+
+**`make run` fails with `Connection refused`.** The containers are not running: `make up`, then check `make ps`.
+
+**Requests return `401` with a token from `make token`.** The token expired (15 minutes): get a new one. If you changed
+`COMMERCE_KEYCLOAK_PORT`, restart both Keycloak (`make down && make up`) and the service so they agree on the issuer.
+
 ## Debugging tips
 
 - **Every error response has a `requestId`.** Search for it in the logs to find everything that happened during that

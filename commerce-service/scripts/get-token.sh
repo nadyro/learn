@@ -9,7 +9,10 @@ set -euo pipefail
 
 USERNAME="${1:-alice}"
 PASSWORD="${2:-$USERNAME}"
-KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:8180}"
+
+# shellcheck source=load-env.sh
+source "$(dirname "$0")/load-env.sh"
+KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:${COMMERCE_KEYCLOAK_PORT:-8180}}"
 
 response=$(curl --silent --show-error --fail-with-body \
   --data-urlencode "grant_type=password" \

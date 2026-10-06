@@ -41,6 +41,9 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/customers/me
 
 Run `make` to list every command. When you are done: `make down` (keeps data) or `make reset` (deletes it).
 
+**Port already in use** (e.g. another project's Postgres on 5432)? `cp .env.example .env`, pick free ports in `.env`,
+then `make down && make up`. Docker Compose, `make run` and the scripts all read that file.
+
 ### Local URLs
 
 | What                     | URL                                         | Credentials                         |
@@ -54,6 +57,8 @@ Run `make` to list every command. When you are done: `make down` (keeps data) or
 | Prometheus¹              | http://localhost:9090                       |                                     |
 | Jaeger (traces)¹         | http://localhost:16686                      |                                     |
 | PostgreSQL               | localhost:5432, database `commerce`         | commerce / commerce (`make db`)     |
+
+Ports shown are the defaults; they can be changed in `.env` (see above).
 
 ¹ Started by `make up-observability`. To send traces to Jaeger, start the service with `TRACING_ENABLED=true make run`.
 

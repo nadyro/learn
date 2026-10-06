@@ -57,7 +57,8 @@ Consumers are deployed independently from us, so the contract must evolve withou
 Kafka UI (http://localhost:8085) shows the topic and its messages. From the command line:
 
 ```bash
+# Inside the container, use the INTERNAL listener (29092): it works whatever COMMERCE_KAFKA_PORT is.
 docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 --topic commerce.order-events.v1 --from-beginning \
+  --bootstrap-server localhost:29092 --topic commerce.order-events.v1 --from-beginning \
   --formatter-property print.key=true
 ```

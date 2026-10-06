@@ -5,8 +5,10 @@
 # Usage: scripts/smoke-test.sh
 set -euo pipefail
 
-API_URL="${API_URL:-http://localhost:8080}"
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=load-env.sh
+source "$SCRIPTS_DIR/load-env.sh"
+API_URL="${API_URL:-http://localhost:8080}"
 PRODUCT_ID="0192f0a0-0000-7000-8000-000000000004" # "Daypack 22 L" from the local seed data, 79.90 EUR
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -42,4 +44,4 @@ step "Marking as delivered"
 curl --silent --fail -X POST "$API_URL/api/v1/admin/orders/$ORDER_ID/delivery" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | grep -q '"status":"DELIVERED"' || fail "not delivered"
 
-printf '\n\033[1;32mSmoke test passed.\033[0m Order events are visible in Kafka UI: http://localhost:8085\n'
+printf '\n\033[1;32mSmoke test passed.\033[0m Order events are visible in Kafka UI: http://localhost:%s\n' "${COMMERCE_KAFKA_UI_PORT:-8085}"

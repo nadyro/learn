@@ -1,9 +1,14 @@
-# Profile for running the service on a developer machine against the containers of docker-compose.yml.
+# Profile for running the service on a developer machine against the containers of compose.yaml.
 # Activated by `make run` (or SPRING_PROFILES_ACTIVE=local). Never used in a deployed environment.
 
 spring:
+  config:
+    # Optional, git-ignored .env file (see .env.example), shared with Docker Compose. It only changes the local ports,
+    # e.g. when another project already uses 5432. Read from the working directory: run from commerce-service/.
+    import: optional:file:.env[.properties]
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/commerce
+    url: jdbc:postgresql://localhost:${COMMERCE_POSTGRES_PORT:5432}/commerce
     username: commerce
     password: commerce
 
@@ -12,14 +17,14 @@ spring:
     locations: classpath:db/migration,classpath:db/seed
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:${COMMERCE_KAFKA_PORT:9092}
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8180/realms/kestrel
-          jwk-set-uri: http://localhost:8180/realms/kestrel/protocol/openid-connect/certs
+          issuer-uri: http://localhost:${COMMERCE_KEYCLOAK_PORT:8180}/realms/kestrel
+          jwk-set-uri: http://localhost:${COMMERCE_KEYCLOAK_PORT:8180}/realms/kestrel/protocol/openid-connect/certs
 
 management:
   tracing:
