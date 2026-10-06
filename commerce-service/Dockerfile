@@ -3,7 +3,7 @@
 # =====================================================================================================================
 # Build stage: compiles the application with the exact Maven version of the wrapper.
 # =====================================================================================================================
-FROM eclipse-temurin:21-jdk-noble AS build
+FROM eclipse-temurin:24-jdk-noble AS build
 WORKDIR /workspace
 
 # Copy the build definition alone first. Dependencies are downloaded in their own layer, which Docker reuses until
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # =====================================================================================================================
 # Runtime stage: only a JRE and the application, no build tools or source code.
 # =====================================================================================================================
-FROM eclipse-temurin:21-jre-noble AS runtime
+FROM eclipse-temurin:24-jre-noble AS runtime
 
 # Never run as root: if the application is compromised, the attacker is an unprivileged user in the container.
 RUN groupadd --system --gid 10001 app \
