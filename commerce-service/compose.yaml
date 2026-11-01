@@ -178,7 +178,7 @@ services:
   # Distributed traces: http://localhost:16686 (receives OTLP on 4318)
   jaeger:
     profiles: ["observability"]
-    image: jaegertracing/jaeger:2.21.0
+    image: jaegertracing/jaeger:2.22.0
     ports:
       - "16686:16686"
       - "4318:4318"
