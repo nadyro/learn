@@ -148,7 +148,7 @@ services:
   # Metrics and alert rules: http://localhost:9090
   prometheus:
     profiles: ["observability"]
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --web.enable-lifecycle
