@@ -22,7 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Versions not managed by the Spring Boot BOM -->
-        <springdoc.version>3.1.1</springdoc.version>
+        <springdoc.version>3.2.0</springdoc.version>
         <archunit.version>1.5.1</archunit.version>
 
         <!-- Plugin versions not managed by the Spring Boot parent -->
